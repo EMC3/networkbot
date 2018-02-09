@@ -1,0 +1,103 @@
+#ifndef LOG_H
+#define LOG_H
+#include <QString>
+#include <QByteArray>
+#include <sstream>
+
+
+template<typename T>
+struct LoggerAdapter{
+    static void write(std::stringstream & stream, const T & value){
+        stream << value;
+    }
+};
+
+template<>
+struct LoggerAdapter<QString> {
+    static void write(std::stringstream & stream, const QString & value){
+        stream << qPrintable(value);
+    }
+};
+
+class DLLXP Logger
+{
+
+public:
+    static void init(const char * logpath);
+
+    Logger(const char * file = 0, const char * line = 0);
+    ~Logger();
+
+    template<typename T> void write(const T & t){
+        LoggerAdapter<T>::write(stream, t);
+    }
+
+    template<typename T> inline Logger &operator<<(const T & t){
+        write(t);
+        return *this;
+    }
+    /*
+
+    template inline Logger &operator<<(QString & t){
+        write(qPrintable(t));
+        return *this;
+    }
+
+    template inline Logger &operator<<(qint64 t){
+        write(QString::number(t));
+        return *this;
+    }
+
+    template inline Logger &operator<<(bool t){
+        this->write(t ? "true" : "false");
+        return *this;
+    }
+
+    template inline Logger &operator<<(QByteArray & t){
+        char * hexString = (char*)calloc(t.length()+1,5);
+        for(int i = 0; i < t.length(); i++){
+            snprintf(hexString,5,"0x%x ",t.at(i));
+        }
+        this->write(hexString);
+        free(hexString);
+        return *this;
+    }
+*/
+
+private:
+    void timestamp();
+
+    static char * logPath;
+
+    std::stringstream stream;
+};
+
+template<> void Logger::write(QString t);
+
+/*
+template <typename SequentialContainer>
+inline Logger &psc__(Logger & debug, const char *which, const SequentialContainer &c)
+{
+    debug << which << '(';
+    typename SequentialContainer::const_iterator it = c.begin(), end = c.end();
+    if (it != end) {
+        debug << *it;
+        ++it;
+    }
+    while (it != end) {
+        debug << ", " << *it;
+        ++it;
+    }
+    debug << ')';
+    return debug;
+}
+*/
+
+template <class T>
+inline Logger &operator<<(Logger &debug, const QList<T> &list)
+{
+    return psc__(debug, "" /*for historical reasons*/, list);
+}
+
+
+#endif // LOG_H
