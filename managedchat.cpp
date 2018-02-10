@@ -1,6 +1,6 @@
 #include "managedchat.h"
 
-ManagedChat::ManagedChat(int64_t chatId, TgBot::Bot & bot)
+ManagedChat::ManagedChat(int64_t chatId, TgBot::Bot * bot)
 {
     this->chatId = chatId;
     this->bot = bot;
@@ -48,6 +48,16 @@ void ManagedChat::onDel(TgBot::Message::Ptr message)
 }
 
 void ManagedChat::onSetname(TgBot::Message::Ptr message)
+{
+
+}
+
+void ManagedChat::onMessage(TgBot::Message::Ptr message)
+{
+
+}
+
+void ManagedChat::onScanFinished(ScanResult &res)
 {
 
 }

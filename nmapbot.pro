@@ -4,7 +4,7 @@
 #
 #-------------------------------------------------
 
-QT       += core gui
+QT       += core gui sql
 
 QMAKE_CXXFLAGS += -std=c++11
 QMAKE_LFLAGS += -std=c++11
@@ -34,7 +34,10 @@ SOURCES += \
     logger/loggerbackend.cpp \
     config.cpp \
     managedchat.cpp \
-    command.cpp
+    command.cpp \
+    scanresult.cpp \
+    scanner.cpp \
+    db.cpp
 
 HEADERS += \
     logger/log.h \
@@ -44,7 +47,10 @@ HEADERS += \
     dataman/yaml2qstring.h \
     config.h \
     managedchat.h \
-    command.h
+    command.h \
+    scanresult.h \
+    scanner.h \
+    db.h
 
 FORMS += \
     logger/logdisplay.ui

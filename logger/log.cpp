@@ -16,9 +16,10 @@
 
 LoggerBackend * Logger::backend = NULL;
 
-void Logger::init(const char * logpath){
+void Logger::init(const char * logpath, bool colors){
     LoggerBackend * backend = new LoggerBackend(logpath);
     Logger::backend = backend;
+    if(colors)Logger::getBackend()->setColorSupport(true);
 }
 
 Logger::Logger(const char *file, int line, int what){

@@ -70,7 +70,7 @@ class  Logger
 {
 
 public:
-    static void init(const char * logpath);
+    static void init(const char * logpath, bool colors = false);
 
     Logger(const char * file = 0, int line = -1, int what = -1);
     ~Logger();
