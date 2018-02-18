@@ -5,12 +5,19 @@
 #include "tgbot/tgbot.h"
 #include "scanresult.h"
 #include <vector>
+#include <set>
 #include <string>
+#include <sstream>
+#include "db.h"
 
 class ManagedChat
 {
 public:
-    ManagedChat(int64_t chatId, TgBot::Bot * bot);
+    enum Status{
+        Idle, AddDownNotify, AddUpNotify, AddScan, PortscanHost, PortscanPorts, PingscanRange, ChangeNameGetHost, ChangeNameGetName
+    };
+
+    ManagedChat(int64_t chatId, TgBot::Bot * bot, Db *db);
     void onList(TgBot::Message::Ptr message);
     void onNotifyUp(TgBot::Message::Ptr message);
     void onNotifyDown(TgBot::Message::Ptr message);
@@ -25,14 +32,23 @@ public:
 
     void onScanFinished(ScanResult & res);
 
-    int status = 0;
+    void newDevice(Host & dev);
+    void deviceUp(int deviceId);
+    void deviceDown(int deviceId);
+
+    void sendMessage(std::stringstream & ss);
+
+
+    Status status = Idle;
 
     int64_t chatId;
     TgBot::Bot * bot;
 
-    std::vector<int> notifyUps;
-    std::vector<int> notifyDowns;
-    bool notifyNewDevice;
+    Db * db;
+
+    std::set<int> notifyUps;
+    std::set<int> notifyDowns;
+    bool notifyNewDevice = false;
     std::vector<std::string> watchedAddresses;
 };
 

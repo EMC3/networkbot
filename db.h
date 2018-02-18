@@ -19,10 +19,14 @@ public:
     void changeHostIp(int host, std::string name);
 
 
+
     int64_t getLastSeen(int hostId);
 
     void setHostName(int host, std::string name);
     std::string getHostName(int host);
+
+    std::string getIp(int host);
+    std::string getMac(int host);
 
 private:
     int currentScanId;

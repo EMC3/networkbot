@@ -1,6 +1,7 @@
 #include "db.h"
 #include "logger/log.h"
 #include <QSqlQuery>
+#include <QVariant>
 Db::Db()
 {
     m_db = QSqlDatabase::addDatabase("QSQLITE");
@@ -24,15 +25,15 @@ Db::Db()
 void Db::addScan(int64_t time)
 {
     QSqlQuery addQuery("INSERT INTO Timestamps (timestamp) VALUES(:ts)");
-    addQuery.bindValue(":ts",time);
+    addQuery.bindValue(":ts",(qlonglong)time);
     addQuery.exec();
 
     QSqlQuery readBack("SELECT scanId FROM Timestamps WHERE timestamp = :ts");
-    readBack.bindValue(":ts",time);
+    readBack.bindValue(":ts",(qlonglong)time);
     readBack.exec();
 
     if (readBack.next()){
-        currentScanId = readBack.value(0);
+        currentScanId = readBack.value(0).toInt();
     }else{
         ERR << "Read back failed";
     }
@@ -42,11 +43,11 @@ void Db::addScan(int64_t time)
 int Db::getHostIdByIp(std::string ip)
 {
     QSqlQuery readBack("SELECT id FROM Hosts WHERE ipAddress = :ip");
-    readBack.bindValue(":ip",ip);
+    readBack.bindValue(":ip",QString::fromStdString(ip));
     readBack.exec();
 
     if (readBack.next()){
-        return readBack.value(0);
+        return readBack.value(0).toInt();
     }else{
         return -1;
     }
@@ -55,11 +56,11 @@ int Db::getHostIdByIp(std::string ip)
 int Db::getHostIdByMac(std::string mac)
 {
     QSqlQuery readBack("SELECT id FROM Hosts WHERE macAddress = :ip");
-    readBack.bindValue(":ip",mac);
+    readBack.bindValue(":ip",QString::fromStdString(mac));
     readBack.exec();
 
     if (readBack.next()){
-        return readBack.value(0);
+        return readBack.value(0).toInt();
     }else{
         return -1;
     }
@@ -68,11 +69,11 @@ int Db::getHostIdByMac(std::string mac)
 int Db::getHostIdByName(std::string name)
 {
     QSqlQuery readBack("SELECT id FROM HostNames WHERE name = :nm");
-    readBack.bindValue(":nm",name);
+    readBack.bindValue(":nm",QString::fromStdString(name));
     readBack.exec();
 
     if (readBack.next()){
-        return readBack.value(0);
+        return readBack.value(0).toInt();
     }else{
         return -1;
     }
@@ -81,18 +82,18 @@ int Db::getHostIdByName(std::string name)
 int Db::addHost(std::string ip, std::string mac, std::string name)
 {
     QSqlQuery addQuery("INSERT INTO Hosts (macAddress, ipAddress) VALUES(:mac, :ip)");
-    addQuery.bindValue(":mac",mac);
-    addQuery.bindValue(":ip",ip);
+    addQuery.bindValue(":mac",QString::fromStdString(mac));
+    addQuery.bindValue(":ip",QString::fromStdString(ip));
     addQuery.exec();
 
     QSqlQuery readBack("SELECT id FROM Hosts WHERE macAddress = :mac AND ipAddress = :ip");
-    readBack.bindValue(":mac",mac);
-    readBack.bindValue(":ip",ip);
+    readBack.bindValue(":mac",QString::fromStdString(mac));
+    readBack.bindValue(":ip",QString::fromStdString(ip));
     readBack.exec();
 
     int id;
     if (readBack.next()){
-        id = readBack.value(0);
+        id = readBack.value(0).toInt();
     }else{
         ERR << "Read back failed";
         return -1;
@@ -101,7 +102,7 @@ int Db::addHost(std::string ip, std::string mac, std::string name)
     if(name != ""){
         QSqlQuery addQuery2("INSERT INTO HostNames (id, name) VALUES(:id, :nm)");
         addQuery2.bindValue(":id",id);
-        addQuery2.bindValue(":nm",name);
+        addQuery2.bindValue(":nm",QString::fromStdString(name));
         addQuery2.exec();
     }
 
@@ -110,12 +111,18 @@ int Db::addHost(std::string ip, std::string mac, std::string name)
 
 void Db::addHostToCurrentScan(int hostId)
 {
-
+    QSqlQuery addQuery("INSERT INTO HostsHistory (scanId, hostId) VALUES(:sc, :hid)");
+    addQuery.bindValue(":sc",currentScanId);
+    addQuery.bindValue(":hid",hostId);
+    addQuery.exec();
 }
 
 void Db::changeHostIp(int host, std::string name)
 {
-
+    QSqlQuery addQuery("UPDATE hosts SET ip = :nip WHERE id = :hid");
+    addQuery.bindValue(":nip",QString::fromStdString(name));
+    addQuery.bindValue(":hid",host);
+    addQuery.exec();
 }
 
 int64_t Db::getLastSeen(int hostId)
@@ -127,12 +134,46 @@ void Db::setHostName(int host, std::string name)
 {
     QSqlQuery addQuery2("INSERT INTO HostNames (id, name) VALUES(:id, :nm) ON DUPLICATE KEY UPDATE name = :nm2");
     addQuery2.bindValue(":id",host);
-    addQuery2.bindValue(":nm",name);
-    addQuery2.bindValue(":nm2",name);
+    addQuery2.bindValue(":nm",QString::fromStdString(name));
+    addQuery2.bindValue(":nm2",QString::fromStdString(name));
     addQuery2.exec();
 }
 
 std::string Db::getHostName(int host)
 {
+    QSqlQuery readBack("SELECT name FROM HostNames WHERE id = :hid");
+    readBack.bindValue(":hid",host);
+    readBack.exec();
 
+    if (readBack.next()){
+        return readBack.value(0).toString().toStdString();
+    }else{
+        return "";
+    }
+}
+
+std::string Db::getIp(int host)
+{
+    QSqlQuery readBack("SELECT ipAddress FROM Hosts WHERE id = :hid");
+    readBack.bindValue(":hid",host);
+    readBack.exec();
+
+    if (readBack.next()){
+        return readBack.value(0).toString().toStdString();
+    }else{
+        return "";
+    }
+}
+
+std::string Db::getMac(int host)
+{
+    QSqlQuery readBack("SELECT macAddress FROM Hosts WHERE id = :hid");
+    readBack.bindValue(":hid",host);
+    readBack.exec();
+
+    if (readBack.next()){
+        return readBack.value(0).toString().toStdString();
+    }else{
+        return "";
+    }
 }

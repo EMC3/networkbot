@@ -9,10 +9,11 @@
 #include "command.h"
 #include <QDateTime>
 #include "scanner.h"
+#include "db.h"
 
 using namespace std;
 
-map<int64_t,ManagedChat> managedChats;
+map<int64_t,ManagedChat*> managedChats;
 
 int lastJob;
 
@@ -21,20 +22,61 @@ struct Unauthorized
     Unauthorized() {}
 };
 
-ManagedChat & getChat(int64_t chatId){
+ManagedChat * getChat(int64_t chatId){
     auto i = managedChats.find(chatId);
     if(i == managedChats.end())throw Unauthorized();
     return i->second;
 }
+Db * db;
+
+set<int> lastUp;
+set<int> currentUp;
 
 void regularPingscanResult(ScanResult r){
     for(Host h : r.nodesUp){
-        string identifier = (h.mac=="") ? h.ip : h.mac;
-
+        int hid = -1;
+        if(h.mac==""){
+            hid = db->getHostIdByIp(h.ip);
+        }else{
+            hid = db->getHostIdByMac(h.mac);
+            if(hid != -1)db->changeHostIp(hid,h.ip);
+        }
+        if(hid == -1){
+            hid = db->addHost(h.ip,h.mac,"");
+            for(auto i = managedChats.begin(); i != managedChats.end(); i++){
+                ManagedChat * mc = i->second;
+                if(mc->notifyNewDevice)mc->newDevice(h);
+            }
+        }
+        db->addHostToCurrentScan(hid);
+        currentUp.insert(hid);
     }
 
     if(r.jobId == lastJob){
+        for(int id : currentUp){
+            auto p = lastUp.find(id);
+            if(p == lastUp.end()){
+                LOG << "Host "<<id<<" goes up";
+                for(auto i = managedChats.begin(); i != managedChats.end(); i++){
+                    ManagedChat * mc = i->second;
+                    if(mc->notifyUps.find(id) != mc->notifyUps.end())mc->deviceUp(id);
+                }
 
+            }else{
+                lastUp.erase(p);
+            }
+        }
+        for(int id : lastUp){
+            LOG << "Host "<<id<<" goes down";
+
+            for(auto i = managedChats.begin(); i != managedChats.end(); i++){
+                ManagedChat * mc = i->second;
+                if(mc->notifyDowns.find(id) != mc->notifyDowns.end())mc->deviceDown(id);
+            }
+        }
+        lastUp.clear();
+        lastUp.insert(currentUp.begin(), currentUp.end());
+        currentUp.clear();
     }
 }
 
@@ -45,6 +87,8 @@ int main(int argc, char *argv[])
 
     Logger::init("latest.log");
 
+    LOG << "Loading database...";
+    db = new Db();
 
     LOG << "Loading Config...";
     Config conf;
@@ -69,7 +113,7 @@ int main(int argc, char *argv[])
 
     bot.getEvents().onCommand("list", [&bot](TgBot::Message::Ptr message) {
         try{
-            getChat(message->chat->id).onList(message);
+            getChat(message->chat->id)->onList(message);
         }catch(Unauthorized &error){
             bool hasUsername = message->chat->type == TgBot::Chat::Type::Private || message->chat->type == TgBot::Chat::Type::Channel;
             ERR << "Unauthorized command from: "<<message->chat->id<< " "<< (hasUsername ? message->chat->username : message->chat->title);
@@ -79,7 +123,7 @@ int main(int argc, char *argv[])
 
     bot.getEvents().onCommand("notifyup", [&bot](TgBot::Message::Ptr message) {
         try{
-            getChat(message->chat->id).onNotifyUp(message);
+            getChat(message->chat->id)->onNotifyUp(message);
         }catch(Unauthorized &error){
             bool hasUsername = message->chat->type == TgBot::Chat::Type::Private || message->chat->type == TgBot::Chat::Type::Channel;
             ERR << "Unauthorized command from: "<<message->chat->id<< " "<< (hasUsername ? message->chat->username : message->chat->title);
@@ -89,7 +133,7 @@ int main(int argc, char *argv[])
 
     bot.getEvents().onCommand("notifydown", [&bot](TgBot::Message::Ptr message) {
         try{
-            getChat(message->chat->id).onNotifyDown(message);
+            getChat(message->chat->id)->onNotifyDown(message);
         }catch(Unauthorized &error){
             bool hasUsername = message->chat->type == TgBot::Chat::Type::Private || message->chat->type == TgBot::Chat::Type::Channel;
             ERR << "Unauthorized command from: "<<message->chat->id<< " "<< (hasUsername ? message->chat->username : message->chat->title);
@@ -99,7 +143,7 @@ int main(int argc, char *argv[])
 
     bot.getEvents().onCommand("notifynew", [&bot](TgBot::Message::Ptr message) {
         try{
-            getChat(message->chat->id).onNotifyNew(message);
+            getChat(message->chat->id)->onNotifyNew(message);
         }catch(Unauthorized &error){
             bool hasUsername = message->chat->type == TgBot::Chat::Type::Private || message->chat->type == TgBot::Chat::Type::Channel;
             ERR << "Unauthorized command from: "<<message->chat->id<< " "<< (hasUsername ? message->chat->username : message->chat->title);
@@ -109,7 +153,7 @@ int main(int argc, char *argv[])
 
     bot.getEvents().onCommand("portscan", [&bot](TgBot::Message::Ptr message) {
         try{
-            getChat(message->chat->id).onPortscan(message);
+            getChat(message->chat->id)->onPortscan(message);
         }catch(Unauthorized &error){
             bool hasUsername = message->chat->type == TgBot::Chat::Type::Private || message->chat->type == TgBot::Chat::Type::Channel;
             ERR << "Unauthorized command from: "<<message->chat->id<< " "<< (hasUsername ? message->chat->username : message->chat->title);
@@ -120,7 +164,7 @@ int main(int argc, char *argv[])
 
     bot.getEvents().onCommand("pingscan", [&bot](TgBot::Message::Ptr message) {
         try{
-            getChat(message->chat->id).onPingscan(message);
+            getChat(message->chat->id)->onPingscan(message);
         }catch(Unauthorized &error){
             bool hasUsername = message->chat->type == TgBot::Chat::Type::Private || message->chat->type == TgBot::Chat::Type::Channel;
             ERR << "Unauthorized command from: "<<message->chat->id<< " "<< (hasUsername ? message->chat->username : message->chat->title);
@@ -130,7 +174,7 @@ int main(int argc, char *argv[])
 
     bot.getEvents().onCommand("add", [&bot](TgBot::Message::Ptr message) {
         try{
-            getChat(message->chat->id).onAdd(message);
+            getChat(message->chat->id)->onAdd(message);
         }catch(Unauthorized &error){
             bool hasUsername = message->chat->type == TgBot::Chat::Type::Private || message->chat->type == TgBot::Chat::Type::Channel;
             ERR << "Unauthorized command from: "<<message->chat->id<< " "<< (hasUsername ? message->chat->username : message->chat->title);
@@ -140,7 +184,7 @@ int main(int argc, char *argv[])
 
     bot.getEvents().onCommand("del", [&bot](TgBot::Message::Ptr message) {
         try{
-            getChat(message->chat->id).onDel(message);
+            getChat(message->chat->id)->onDel(message);
         }catch(Unauthorized &error){
             bool hasUsername = message->chat->type == TgBot::Chat::Type::Private || message->chat->type == TgBot::Chat::Type::Channel;
             ERR << "Unauthorized command from: "<<message->chat->id<< " "<< (hasUsername ? message->chat->username : message->chat->title);
@@ -150,7 +194,7 @@ int main(int argc, char *argv[])
 
     bot.getEvents().onCommand("setname", [&bot](TgBot::Message::Ptr message) {
         try{
-            getChat(message->chat->id).onSetname(message);
+            getChat(message->chat->id)->onSetname(message);
         }catch(Unauthorized &error){
             bool hasUsername = message->chat->type == TgBot::Chat::Type::Private || message->chat->type == TgBot::Chat::Type::Channel;
             ERR << "Unauthorized command from: "<<message->chat->id<< " "<< (hasUsername ? message->chat->username : message->chat->title);
@@ -160,8 +204,8 @@ int main(int argc, char *argv[])
 
     bot.getEvents().onNonCommandMessage([&bot](TgBot::Message::Ptr message) {
         try{
-            ManagedChat & mc = getChat(message->chat->id);
-            if(mc.status != 0)mc.onMessage(message);
+            ManagedChat * mc = getChat(message->chat->id);
+            if(mc->status != 0)mc->onMessage(message);
         }catch(Unauthorized &error){
             bool hasUsername = message->chat->type == TgBot::Chat::Type::Private || message->chat->type == TgBot::Chat::Type::Channel;
             ERR << "Unauthorized command from: "<<message->chat->id<< " "<< (hasUsername ? message->chat->username : message->chat->title);
@@ -188,7 +232,7 @@ int main(int argc, char *argv[])
             Config::set("managedChats",managedChatIds);
             Config::save();
 
-            managedChats.emplace(message->chat->id,ManagedChat(message->chat->id, &bot));
+            managedChats.emplace(message->chat->id,new ManagedChat(message->chat->id, &bot, db));
 
             return;
         }
@@ -198,7 +242,7 @@ int main(int argc, char *argv[])
 
     vector<int64_t> managedChatIds = Config::get("managedChats",vector<int64_t>());
 
-    for(int64_t chatId : managedChatIds)managedChats.emplace(chatId,ManagedChat(chatId, &bot));
+    for(int64_t chatId : managedChatIds)managedChats.emplace(chatId,new ManagedChat(chatId, &bot,db));
 
     LOG << "Starting!";
     try {
@@ -218,12 +262,13 @@ int main(int argc, char *argv[])
                 std::set<std::string> adresses;
 
                 for(auto i = managedChats.begin(); i != managedChats.end(); i++){
-                    for(std::string str : i->second.watchedAddresses){
+                    for(std::string str : i->second->watchedAddresses){
                         adresses.insert(str);
                     }
                 }
 
                 LOG << "Starting periodic scan with "<<adresses.size()<<" addresses or address ranges";
+                db->addScan(QDateTime::currentMSecsSinceEpoch());
 
                 for(std::string addr : adresses){
                     ScanJob sj = ScanJob::createPingscanJob(addr,regularPingscanResult);
